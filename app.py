@@ -4,21 +4,20 @@ S-Curve Dashboard — PT Sumaraja Indah / JK7 Structure Works
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import gspread
 from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# KONFIGURASI HALAMAN
 st.set_page_config(
-    page_title="S-Curve Dashboard - JK7 Sumaraja",
+    page_title="S-Curve Structure - JK7",
     page_icon="📈",
     layout="wide",
 )
 
-WORKSHEET_NAME = "initial_data_for_gsheet"  
-
-# KONEKSI KE GOOGLE SHEETS
+WORKSHEET_NAME = "initial_data_for_gsheet" 
+# Connect to GSheets
 @st.cache_resource
 def get_gspread_client():
     scopes = [
@@ -33,7 +32,8 @@ def get_gspread_client():
 def get_worksheet():
     client = get_gspread_client()
     sheet_id = st.secrets["sheet_id"]
-    return client.open_by_key(sheet_id).worksheet(WORKSHEET_NAME)
+    spreadsheet = client.open_by_key(sheet_id)
+    return spreadsheet.get_worksheet(0)
 
 RAW_COLUMNS = ["Date", "PlanZoning", "ActualZoning", "Remarks"]
 
@@ -75,11 +75,11 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
     has_actual = df["ActualZoning"].notna()
     actual_filled = df["ActualZoning"].fillna(0)
     df["ActualCum"] = actual_filled.cumsum()
-    df.loc[~has_actual, "ActualCum"] = pd.NA
+    df.loc[~has_actual, "ActualCum"] = np.nan
     # forward-looking rows (belum ada actual sama sekali) tetap NaN
     last_actual_idx = df[has_actual].index.max() if has_actual.any() else None
     if last_actual_idx is not None:
-        df.loc[df.index > last_actual_idx, "ActualCum"] = pd.NA
+        df.loc[df.index > last_actual_idx, "ActualCum"] = np.nan
 
     df["ActualPct"] = df["ActualCum"] / total_target * 100
     df["Dev"] = df["ActualPct"] - df["PlanPct"]
@@ -90,9 +90,9 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 def update_actual(target_date: str, qty: float, remarks: str):
     """Update baris ActualZoning & Remarks di Google Sheet untuk tanggal tertentu."""
     ws = get_worksheet()
-    dates = ws.col_values(1)  # kolom A = Date
+    dates = ws.col_values(1) 
     try:
-        row_idx = dates.index(target_date) + 1  # +1 karena gspread 1-indexed
+        row_idx = dates.index(target_date) + 1 
     except ValueError:
         return False, "Tanggal tidak ditemukan di sheet. Pastikan formatnya YYYY-MM-DD."
 
@@ -155,7 +155,6 @@ with c4:
     )
 
 st.divider()
-
 
 # SCURVE (Plan vs Actual)
 st.subheader("Kurva S — Plan vs Actual (% Kumulatif)")
@@ -221,7 +220,7 @@ st.caption("Di atas 0 = lebih cepat dari plan · di bawah 0 = tertinggal dari pl
 st.divider()
 
 
-# INPUT FORM + MILESTONE LIST
+# INPUT FORM & MILESTONE LIST
 col_form, col_milestone = st.columns([1.1, 1])
 
 with col_form:
