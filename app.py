@@ -16,7 +16,7 @@ st.set_page_config(
     layout="wide",
 )
 
-WORKSHEET_NAME = "Sheet1"  # ganti sesuai nama tab di Google Sheet kamu
+WORKSHEET_NAME = "initial_data_for_gsheet"  
 
 # KONEKSI KE GOOGLE SHEETS
 @st.cache_resource
@@ -90,9 +90,9 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 def update_actual(target_date: str, qty: float, remarks: str):
     """Update baris ActualZoning & Remarks di Google Sheet untuk tanggal tertentu."""
     ws = get_worksheet()
-    dates = ws.col_values(1) 
+    dates = ws.col_values(1)  # kolom A = Date
     try:
-        row_idx = dates.index(target_date) + 1 
+        row_idx = dates.index(target_date) + 1  # +1 karena gspread 1-indexed
     except ValueError:
         return False, "Tanggal tidak ditemukan di sheet. Pastikan formatnya YYYY-MM-DD."
 
@@ -131,7 +131,7 @@ next_date = (
 
 # HEADER
 st.markdown("##### PT SUMARAJA INDAH · JK7 STRUCTURE WORKS")
-st.title("📈 S-Curve Structure Dashboard")
+st.title("📈 S-Curve Progress Dashboard")
 
 if last_row is not None:
     st.caption(f"Update terakhir: {last_row['Date'].strftime('%d %B %Y')}")
@@ -193,12 +193,19 @@ st.plotly_chart(fig_s, use_container_width=True)
 # DEVIASI
 st.subheader("Deviasi Progress (Actual − Plan, % poin)")
 
+def hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """Konversi warna hex (#rrggbb) ke string rgba() yang valid untuk Plotly."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 dev_color = "#7fd6a0" if deviation >= 0 else "#f2836b"
 fig_dev = go.Figure()
 fig_dev.add_trace(go.Scatter(
     x=df["Date"], y=df["Dev"], name="Deviasi",
     line=dict(color=dev_color, width=2),
-    fill="tozeroy", fillcolor=f"{dev_color}33",
+    fill="tozeroy", fillcolor=hex_to_rgba(dev_color, 0.2),
 ))
 fig_dev.add_hline(y=0, line_color="gray", line_width=1)
 if last_row is not None:
@@ -213,7 +220,8 @@ st.caption("Di atas 0 = lebih cepat dari plan · di bawah 0 = tertinggal dari pl
 
 st.divider()
 
-# INPUT FORM  & MILESTONE LIST
+
+# INPUT FORM + MILESTONE LIST
 col_form, col_milestone = st.columns([1.1, 1])
 
 with col_form:
@@ -242,7 +250,8 @@ with col_milestone:
 
 st.divider()
 
-# New Input Data - Present
+
+# TABEL DATA TERBARU
 st.subheader("Data Terbaru")
 window_start = max(0, (last_actual_idx or 0) - 6)
 window_end = (last_actual_idx or 0) + 8
