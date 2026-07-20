@@ -52,7 +52,7 @@ def load_data():
         )
         st.stop()
 
-    df = df[RAW_COLUMNS].copy()  # abaikan kolom hasil hitung lain di sheet
+    df = df[RAW_COLUMNS].copy()  
     df["Date"] = pd.to_datetime(df["Date"])
     df["PlanZoning"] = pd.to_numeric(df["PlanZoning"], errors="coerce").fillna(0)
     df["ActualZoning"] = pd.to_numeric(
@@ -71,12 +71,13 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
     df["PlanCum"] = df["PlanZoning"].cumsum()
     df["PlanPct"] = df["PlanCum"] / total_target * 100
 
-    # ActualCum: kumulatif hanya dihitung selama ActualZoning tidak kosong (NaN)
+    # Actual Cummulative
     has_actual = df["ActualZoning"].notna()
     actual_filled = df["ActualZoning"].fillna(0)
     df["ActualCum"] = actual_filled.cumsum()
     df.loc[~has_actual, "ActualCum"] = np.nan
-    # forward-looking rows (belum ada actual sama sekali) tetap NaN
+    
+    # NaN Forward if no other actual cummulative
     last_actual_idx = df[has_actual].index.max() if has_actual.any() else None
     if last_actual_idx is not None:
         df.loc[df.index > last_actual_idx, "ActualCum"] = np.nan
@@ -88,7 +89,7 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def update_actual(target_date: str, qty: float, remarks: str):
-    """Update baris ActualZoning & Remarks di Google Sheet untuk tanggal tertentu."""
+    """Update ActualZoning & Remarks di Google Sheet"""
     ws = get_worksheet()
     dates = ws.col_values(1) 
     try:
@@ -106,7 +107,7 @@ def update_actual(target_date: str, qty: float, remarks: str):
     return True, "Tersimpan."
 
 
-# LOAD & OLAH DATA
+# LOAD & Processing Data
 raw_df = load_data()
 df, total_target, last_actual_idx = compute_derived(raw_df)
 
@@ -130,7 +131,7 @@ next_date = (
 
 
 # HEADER
-st.markdown("##### PT SUMARAJA INDAH · JK7 STRUCTURE WORKS")
+st.markdown("##### JK7 STRUCTURE WORKS")
 st.title("📈 S-Curve Progress Dashboard")
 
 if last_row is not None:
