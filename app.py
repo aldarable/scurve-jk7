@@ -64,7 +64,7 @@ def load_data():
 
 
 def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
-   """Calculate cumulative and deviation columns from the raw data (PlanZoning/ActualZoning)."""
+    """Calculate cumulative and deviation columns from the raw data (PlanZoning/ActualZoning)."""
     df = df.copy()
     total_target = df["PlanZoning"].sum()
 
