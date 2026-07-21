@@ -1,5 +1,5 @@
 """
-S-Curve Dashboard — PT Sumaraja Indah / JK7 Structure Works
+S-Curve Dashboard — JK7 Structure Works
 """
 
 import streamlit as st
@@ -37,7 +37,6 @@ def get_worksheet():
 
 RAW_COLUMNS = ["Date", "PlanZoning", "ActualZoning", "Remarks"]
 
-
 @st.cache_data(ttl=30)
 def load_data():
     ws = get_worksheet()
@@ -47,8 +46,8 @@ def load_data():
     missing = [c for c in RAW_COLUMNS if c not in df.columns]
     if missing:
         st.error(
-            f"The following required columns are missing from the sheet: {missing}."
-            f"Please ensure the header row (Row 1) in your Google Sheet contains all required column names."
+            f"Kolom wajib tidak ditemukan di sheet: {missing}. "
+            f"Cek header baris 1 di Google Sheet kamu."
         )
         st.stop()
 
@@ -64,7 +63,7 @@ def load_data():
 
 
 def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
-    """Calculate cumulative and deviation columns from the raw data (PlanZoning/ActualZoning)."""
+    """Hitung kolom kumulatif & deviasi dari data mentah (PlanZoning/ActualZoning)."""
     df = df.copy()
     total_target = df["PlanZoning"].sum()
 
@@ -76,8 +75,7 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
     actual_filled = df["ActualZoning"].fillna(0)
     df["ActualCum"] = actual_filled.cumsum()
     df.loc[~has_actual, "ActualCum"] = np.nan
-    
-    # NaN Forward if no other actual cummulative
+    # If no other Actual Cumm, will be NaN
     last_actual_idx = df[has_actual].index.max() if has_actual.any() else None
     if last_actual_idx is not None:
         df.loc[df.index > last_actual_idx, "ActualCum"] = np.nan
@@ -89,13 +87,13 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def update_actual(target_date: str, qty: float, remarks: str):
-    """Update ActualZoning & Remarks di Google Sheet"""
+    """Update baris ActualZoning & Remarks di Google Sheet untuk tanggal tertentu."""
     ws = get_worksheet()
     dates = ws.col_values(1) 
     try:
         row_idx = dates.index(target_date) + 1 
     except ValueError:
-        return False, "Date not found in the sheet. Please ensure the format is YYYY-MM-DD."
+        return False, "Tanggal tidak ditemukan di sheet. Pastikan formatnya YYYY-MM-DD."
 
     header = ws.row_values(1)
     col_actual = header.index("ActualZoning") + 1
@@ -107,7 +105,7 @@ def update_actual(target_date: str, qty: float, remarks: str):
     return True, "Tersimpan."
 
 
-# LOAD & Processing Data
+# PROCESSING DATA 
 raw_df = load_data()
 df, total_target, last_actual_idx = compute_derived(raw_df)
 
@@ -131,14 +129,14 @@ next_date = (
 
 
 # HEADER
-st.markdown("##### PROJECT JK7 • STRUCTURE WORKS")
-st.title("📈 S-Curve Progress Dashboard")
+st.markdown("##### JK7 STRUCTURE WORKS")
+st.title("📊 Construction Progress Dashboard")
 
 if last_row is not None:
     st.caption(f"Update terakhir: {last_row['Date'].strftime('%d %B %Y')}")
 
 
-# KPI CARDS
+# ACCUMULATION
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Plan Progress", f"{plan_today:.1f}%")
 c2.metric("Actual Progress", f"{actual_today:.1f}%")
@@ -157,8 +155,8 @@ with c4:
 
 st.divider()
 
-# SCURVE (Plan vs Actual)
-st.subheader("Kurva S — Plan vs Actual (% Kumulatif)")
+# S-Curve Progress (Plan vs Actual)
+st.subheader("📈 S-Curve Progress (Plan vs Actual)")
 
 fig_s = go.Figure()
 fig_s.add_trace(go.Scatter(
@@ -190,8 +188,8 @@ fig_s.update_layout(
 st.plotly_chart(fig_s, use_container_width=True)
 
 
-# Deviation
-st.subheader("Deviasi Progress (Actual − Plan, % poin)")
+# S-Curve Progress (Deviation)
+st.subheader("📉 S-Curve Deviation")
 
 def hex_to_rgba(hex_color: str, alpha: float) -> str:
     """Konversi warna hex (#rrggbb) ke string rgba() yang valid untuk Plotly."""
@@ -236,7 +234,7 @@ with col_form:
             ok, msg = update_actual(date_input.strftime("%Y-%m-%d"), qty_input, remarks_input)
             if ok:
                 st.cache_data.clear()
-                st.success("Successfully updated Google Sheets ✅")
+                st.success("Update tersimpan ke Google Sheet ✅")
                 st.rerun()
             else:
                 st.error(msg)
