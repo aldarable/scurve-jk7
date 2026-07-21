@@ -16,7 +16,7 @@ st.set_page_config(
     layout="wide",
 )
 
-WORKSHEET_NAME = "initial_data_for_gsheet" 
+WORKSHEET_NAME = "JK7-Sumaraja-Scurve" 
 # Connect to GSheets
 @st.cache_resource
 def get_gspread_client():
@@ -31,7 +31,7 @@ def get_gspread_client():
 
 def get_worksheet():
     client = get_gspread_client()
-    sheet_id = st.secrets["sheet_id"]
+    sheet_id = st.secrets["scurve"]
     spreadsheet = client.open_by_key(sheet_id)
     return spreadsheet.get_worksheet(0)
 
@@ -251,7 +251,7 @@ st.divider()
 
 
 # NEW DATA
-st.subheader("Data Terbaru")
+st.subheader("Latest Data")
 window_start = max(0, (last_actual_idx or 0) - 6)
 window_end = (last_actual_idx or 0) + 8
 table_df = df.iloc[window_start:window_end][
