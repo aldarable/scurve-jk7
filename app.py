@@ -10,13 +10,20 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
+from zone_map import (
+    load_zone_status, update_zone_status,
+    render_zone_summary, render_zone_map, render_zone_checklist,
+)
+
 st.set_page_config(
     page_title="S-Curve Structure - JK7",
     page_icon="📈",
     layout="wide",
 )
 
-WORKSHEET_NAME = "JK7-Sumaraja-Scurve" 
+WORKSHEET_NAME = "JK7-Sumaraja-Scurve"
+
+
 # Connect to GSheets
 @st.cache_resource
 def get_gspread_client():
@@ -31,11 +38,13 @@ def get_gspread_client():
 
 def get_worksheet():
     client = get_gspread_client()
-    sheet_id = st.secrets["scurve"]
+    sheet_id = st.secrets["sheet_id"]
     spreadsheet = client.open_by_key(sheet_id)
     return spreadsheet.get_worksheet(0)
 
+
 RAW_COLUMNS = ["Date", "PlanZoning", "ActualZoning", "Remarks"]
+
 
 @st.cache_data(ttl=30)
 def load_data():
@@ -51,7 +60,7 @@ def load_data():
         )
         st.stop()
 
-    df = df[RAW_COLUMNS].copy()  
+    df = df[RAW_COLUMNS].copy()
     df["Date"] = pd.to_datetime(df["Date"])
     df["PlanZoning"] = pd.to_numeric(df["PlanZoning"], errors="coerce").fillna(0)
     df["ActualZoning"] = pd.to_numeric(
@@ -89,9 +98,9 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 def update_actual(target_date: str, qty: float, remarks: str):
     """Update ActualZoning & Remarks in Google Sheets for certain date."""
     ws = get_worksheet()
-    dates = ws.col_values(1) 
+    dates = ws.col_values(1)
     try:
-        row_idx = dates.index(target_date) + 1 
+        row_idx = dates.index(target_date) + 1
     except ValueError:
         return False, "The specified date was not found in the sheet. Please ensure the date is in YYYY-MM-DD format."
 
@@ -105,7 +114,7 @@ def update_actual(target_date: str, qty: float, remarks: str):
     return True, "Successfully updated ✅."
 
 
-# PROCESSING DATA 
+# PROCESSING DATA
 raw_df = load_data()
 df, total_target, last_actual_idx = compute_derived(raw_df)
 
@@ -182,15 +191,19 @@ if last_row is not None:
     fig_s.add_vline(x=last_row["Date"], line_dash="dash", line_color="gray", opacity=0.5)
 
 fig_s.update_layout(
-    height=420, yaxis_title="% Kumulatif", yaxis_range=[0, 100],
+    height=420,
+    yaxis=dict(title="% Kumulatif", range=[0, 100], ticksuffix="%"),
     legend=dict(orientation="h", yanchor="bottom", y=1.02),
     margin=dict(l=10, r=10, t=10, b=10),
+    hovermode="x unified",
 )
+fig_s.update_traces(hovertemplate="%{y:.1f}%<extra></extra>", selector=dict(type="scatter"))
 st.plotly_chart(fig_s, use_container_width=True)
 
 
 # S-Curve Progress (Deviation)
 st.subheader("📉 S-Curve Deviation")
+
 
 def hex_to_rgba(hex_color: str, alpha: float) -> str:
     """Convert a hex color (#RRGGBB) to a valid RGBA string for Plotly."""
@@ -211,11 +224,13 @@ if last_row is not None:
     fig_dev.add_vline(x=last_row["Date"], line_dash="dash", line_color="gray", opacity=0.5)
 
 fig_dev.update_layout(
-    height=220, yaxis_title="% poin",
+    height=220,
+    yaxis=dict(title="% poin", ticksuffix="%"),
     margin=dict(l=10, r=10, t=10, b=10), showlegend=False,
 )
+fig_dev.update_traces(hovertemplate="%{y:+.1f}%<extra></extra>")
 st.plotly_chart(fig_dev, use_container_width=True)
-st.caption("Above 0 = Ahead of Schedule • Below 0 = Behind Schedulen")
+st.caption("Above 0 = Ahead of Schedule • Below 0 = Behind Schedule")
 
 st.divider()
 
@@ -261,3 +276,68 @@ table_df.columns = ["Tanggal", "Plan/hari", "Plan Kum%", "Actual/hari", "Actual 
 for col in ["Plan Kum%", "Actual Kum%", "Deviasi"]:
     table_df[col] = table_df[col].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "-")
 st.dataframe(table_df, hide_index=True, use_container_width=True)
+
+
+# =========================================================
+# ZONE / KOLOM TRACKING (Kolom GF, Zone Level 1, Zone Level 2)
+# =========================================================
+st.divider()
+st.header("🏗️ Zone / Kolom Tracking")
+st.caption(
+    "Data di bawah ini diambil dari tab 'zone_status' di Google Sheet yang sama. "
+    "Update status lewat form di bagian paling bawah, atau edit langsung di sheet."
+)
+
+zone_df = load_zone_status(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
+
+tab_gf, tab_l1, tab_l2 = st.tabs(["Kolom GF", "Zone Level 1", "Zone Level 2"])
+
+with tab_gf:
+    render_zone_summary(zone_df, "GF", "JK7 STRUCTURE (Kolom GF)", short_label="Cor Ground Floor")
+    render_zone_map(zone_df, "GF", bg_image_path="assets/denah_gf.png")  # opsional, lewati jika belum ada
+    render_zone_checklist(zone_df, "GF")
+
+with tab_l1:
+    render_zone_summary(zone_df, "L1", "JK7 STRUCTURE (Level 1)", short_label="Cor Level 1")
+    render_zone_map(zone_df, "L1", bg_image_path="assets/denah_L1.png")  # opsional
+    render_zone_checklist(zone_df, "L1")
+    
+with tab_cgf:
+    render_zone_summary(zone_df, "CGF", "JK7 STRUCTURE Kolom (Level GF)", short_label="Kolom Level GF")
+    render_zone_map(zone_df, "CGF", bg_image_path="assets/denah_kolom_gf.png")  # opsional
+    render_zone_checklist(zone_df, "CGF")
+
+with tab_cl1:
+    render_zone_summary(zone_df, "CL1", "JK7 STRUCTURE Kolom (Level 1)", short_label="Kolom Level L1")
+    render_zone_map(zone_df, "CL1", bg_image_path="assets/denah_kolom_L1.png")  # opsional
+    render_zone_checklist(zone_df, "CL1")
+    
+with tab_l2:
+    render_zone_summary(zone_df, "L2", "JK7 STRUCTURE (Level 2)", short_label="Cor Level 2")
+    render_zone_map(zone_df, "L2", bg_image_path="assets/denah_l2.png")  # opsional
+    render_zone_checklist(zone_df, "L2")
+    
+with tab_Cl2:
+    render_zone_summary(zone_df, "CL2", "JK7 STRUCTURE Kolom (Level 2)", short_label="Kolom Level 2")
+    render_zone_map(zone_df, "CL2", bg_image_path="assets/denah_l2.png")  # opsional
+    render_zone_checklist(zone_df, "CL2")
+
+st.divider()
+
+with st.expander("✏️ Update Status Zone/Kolom"):
+    with st.form("update_zone_form", clear_on_submit=True):
+        level_input = st.selectbox("Level", ["GF", "CGF", "L1", "CL1", "L2"])
+        zone_input = st.number_input("Zone / Kolom No.", min_value=1, step=1)
+        status_input = st.selectbox("Status", ["Belum", "Bekisting", "Besi", "Tercor"])
+        date_zone_input = st.date_input("Tanggal Update", value=datetime.now().date())
+        submitted_zone = st.form_submit_button("Simpan Status", type="primary")
+
+        if submitted_zone:
+            ok, msg = update_zone_status(
+                get_gspread_client(), st.secrets["sheet_id"],
+                zone_input, level_input, status_input,
+                date_zone_input.strftime("%Y-%m-%d"),
+            )
+            st.cache_data.clear()
+            st.success(msg) if ok else st.error(msg)
+            st.rerun()
