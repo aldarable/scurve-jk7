@@ -46,8 +46,8 @@ def load_data():
     missing = [c for c in RAW_COLUMNS if c not in df.columns]
     if missing:
         st.error(
-            f"Kolom wajib tidak ditemukan di sheet: {missing}. "
-            f"Cek header baris 1 di Google Sheet kamu."
+            f"The following required columns are missing from the sheet: {missing}. "
+            f"Please verify that the header row (Row 1) in your Google Sheet contains all required column names."
         )
         st.stop()
 
@@ -63,7 +63,7 @@ def load_data():
 
 
 def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
-    """Hitung kolom kumulatif & deviasi dari data mentah (PlanZoning/ActualZoning)."""
+    """Calculate cumulative progress and deviation from the raw PlanZoning and ActualZoning data."""
     df = df.copy()
     total_target = df["PlanZoning"].sum()
 
@@ -87,13 +87,13 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def update_actual(target_date: str, qty: float, remarks: str):
-    """Update baris ActualZoning & Remarks di Google Sheet untuk tanggal tertentu."""
+    """Update ActualZoning & Remarks in Google Sheets for certain date."""
     ws = get_worksheet()
     dates = ws.col_values(1) 
     try:
         row_idx = dates.index(target_date) + 1 
     except ValueError:
-        return False, "Tanggal tidak ditemukan di sheet. Pastikan formatnya YYYY-MM-DD."
+        return False, "The specified date was not found in the sheet. Please ensure the date is in YYYY-MM-DD format."
 
     header = ws.row_values(1)
     col_actual = header.index("ActualZoning") + 1
@@ -102,7 +102,7 @@ def update_actual(target_date: str, qty: float, remarks: str):
     ws.update_cell(row_idx, col_actual, qty)
     if remarks:
         ws.update_cell(row_idx, col_remarks, remarks)
-    return True, "Tersimpan."
+    return True, "Successfully updated ✅."
 
 
 # PROCESSING DATA 
@@ -133,14 +133,14 @@ st.markdown("##### JK7 STRUCTURE WORKS")
 st.title("📊 Construction Progress Dashboard")
 
 if last_row is not None:
-    st.caption(f"Update terakhir: {last_row['Date'].strftime('%d %B %Y')}")
+    st.caption(f"Last Update: {last_row['Date'].strftime('%d %B %Y')}")
 
 
 # ACCUMULATION
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Plan Progress", f"{plan_today:.1f}%")
 c2.metric("Actual Progress", f"{actual_today:.1f}%")
-c3.metric("Deviasi", f"{deviation:+.1f}%")
+c3.metric("Deviation", f"{deviation:+.1f}%")
 with c4:
     st.markdown(
         f"""
@@ -154,6 +154,7 @@ with c4:
     )
 
 st.divider()
+
 
 # S-Curve Progress (Plan vs Actual)
 st.subheader("📈 S-Curve Progress (Plan vs Actual)")
@@ -192,7 +193,7 @@ st.plotly_chart(fig_s, use_container_width=True)
 st.subheader("📉 S-Curve Deviation")
 
 def hex_to_rgba(hex_color: str, alpha: float) -> str:
-    """Konversi warna hex (#rrggbb) ke string rgba() yang valid untuk Plotly."""
+    """Convert a hex color (#RRGGBB) to a valid RGBA string for Plotly."""
     hex_color = hex_color.lstrip("#")
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
@@ -214,27 +215,27 @@ fig_dev.update_layout(
     margin=dict(l=10, r=10, t=10, b=10), showlegend=False,
 )
 st.plotly_chart(fig_dev, use_container_width=True)
-st.caption("Di atas 0 = lebih cepat dari plan · di bawah 0 = tertinggal dari plan")
+st.caption("Above 0 = Ahead of Schedule • Below 0 = Behind Schedulen")
 
 st.divider()
 
 
-# INPUT FORM & MILESTONE LIST
+# INPUT & MILESTONE FORM
 col_form, col_milestone = st.columns([1.1, 1])
 
 with col_form:
-    st.subheader("Input Update Harian")
+    st.subheader("Daily Report")
     with st.form("update_form", clear_on_submit=True):
-        date_input = st.date_input("Tanggal", value=next_date)
-        qty_input = st.number_input("Zoning Aktual (unit)", min_value=0.0, step=1.0)
+        date_input = st.date_input("Date", value=next_date)
+        qty_input = st.number_input("Actual Zoning", min_value=0.0, step=1.0)
         remarks_input = st.text_input("Remarks / Milestone (opsional)")
-        submitted = st.form_submit_button("Simpan Update", type="primary")
+        submitted = st.form_submit_button("Successfully updated ✅", type="primary")
 
         if submitted:
             ok, msg = update_actual(date_input.strftime("%Y-%m-%d"), qty_input, remarks_input)
             if ok:
                 st.cache_data.clear()
-                st.success("Update tersimpan ke Google Sheet ✅")
+                st.success("Successfully updated Google Sheets ✅")
                 st.rerun()
             else:
                 st.error(msg)
@@ -249,7 +250,7 @@ with col_milestone:
 st.divider()
 
 
-# TABEL DATA TERBARU
+# NEW DATA
 st.subheader("Data Terbaru")
 window_start = max(0, (last_actual_idx or 0) - 6)
 window_end = (last_actual_idx or 0) + 8
