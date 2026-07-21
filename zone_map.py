@@ -41,6 +41,33 @@ STATUS_ICON = {
     "Belum": "⬜",
 }
 
+# Kata kunci fleksibel: apapun yang kamu ketik di sheet (Done, Done✅, DONE, Tercor,
+# Selesai, dsb) akan dikenali dan dipetakan ke salah satu dari 4 status baku di atas.
+# Ini supaya kamu tidak perlu ketik ulang data yang sudah ada di sheet.
+STATUS_KEYWORDS = {
+    "Tercor": ["done", "tercor", "selesai", "finish", "cor", "complete"],
+    "Besi": ["besi", "rebar", "steel"],
+    "Bekisting": ["bekisting", "scaffolding", "formwork"],
+    "Belum": ["belum", "pending"],
+}
+
+
+def normalize_status(raw: str) -> str:
+    """Ubah teks status apapun (mis. 'Done✅', 'done', 'Tercor') jadi salah satu
+    dari STATUS_ORDER. Kalau tidak dikenali sama sekali / kosong, dianggap 'Belum'."""
+    if raw is None:
+        return "Belum"
+    text = str(raw).strip().lower()
+    # buang emoji/simbol non-huruf supaya "done✅" match dengan "done"
+    text = "".join(ch for ch in text if ch.isalnum() or ch.isspace()).strip()
+    if not text:
+        return "Belum"
+    for status, keywords in STATUS_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                return status
+    return "Belum"
+
 
 @st.cache_data(ttl=30)
 def load_zone_status(_client, sheet_id: str, worksheet_name: str = "zone_status") -> pd.DataFrame:
@@ -55,8 +82,7 @@ def load_zone_status(_client, sheet_id: str, worksheet_name: str = "zone_status"
         st.stop()
 
     df["ZoneNo"] = pd.to_numeric(df["ZoneNo"], errors="coerce")
-    df["Status"] = df["Status"].fillna("Belum")
-    df["Status"] = df["Status"].where(df["Status"].isin(STATUS_ORDER), "Belum")
+    df["Status"] = df["Status"].apply(normalize_status)
 
     if "DateUpdate" not in df.columns:
         df["DateUpdate"] = ""
@@ -120,11 +146,17 @@ def compute_zone_summary(zone_df: pd.DataFrame, level: str) -> dict:
     }
 
 
-def render_zone_summary(zone_df: pd.DataFrame, level: str, title: str):
-    """Render blok ringkasan seperti gambar Level 1 / Level 2 (Daily & Accumulative Progress)."""
+def render_zone_summary(zone_df: pd.DataFrame, level: str, title: str, short_label: str | None = None):
+    """Render blok ringkasan seperti gambar Level 1 / Level 2 (Daily & Accumulative Progress).
+
+    short_label: label singkat buat baris ringkasan, mis. 'Cor Ground Floor' atau
+    'Cor Level 1'. Kalau tidak diisi, otomatis pakai 'Cor {level}'.
+    """
     s = compute_zone_summary(zone_df, level)
+    icon = " ✅" if s["total"] > 0 and s["done"] == s["total"] else " 📈"
+    label = short_label or f"Cor {level}"
     st.markdown(f"#### {title}")
-    st.markdown(f"**TOTAL : {s['done']}/{s['total']} zone ({s['pct']:.2f}%)**")
+    st.markdown(f"**{label} ({s['done']}/{s['total']}){icon}**")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -189,7 +221,7 @@ def render_zone_checklist(zone_df: pd.DataFrame, level: str, n_cols: int = 2):
     """Render daftar checklist zone, mis. 'Zone 33 (14/5) checkmark', dalam beberapa kolom."""
     df = zone_df[zone_df["Level"] == level].sort_values("ZoneNo")
     cols = st.columns(n_cols)
-    per_col = -(-len(df) // n_cols)  
+    per_col = -(-len(df) // n_cols)  # ceil division
     for i, col in enumerate(cols):
         chunk = df.iloc[i * per_col:(i + 1) * per_col]
         lines = []
