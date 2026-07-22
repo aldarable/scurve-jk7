@@ -170,10 +170,9 @@ def render_progress_summary(zone_df: pd.DataFrame, level: str, metric: str,
                     st.image(image_path, use_container_width=True)
                 except Exception:
                     st.caption(
-                        f"⚠️ Gambar '{image_path}' ada tapi tidak bisa dibaca "
-                        f"(kemungkinan file rusak atau formatnya bukan JPG/PNG asli, "
-                        f"mis. HEIC yang cuma di-rename ekstensinya). "
-                        f"Coba convert ulang jadi JPG/PNG asli lalu upload lagi."
+                        f"⚠️ The image '{image_path}' exists but could not be read "
+                        f"(the file may be corrupted or is not a valid JPG/PNG image. "
+                        f"Please convert it to a standard JPG or PNG format and upload it again.)"
                     )
             else:
                 st.caption(f"(gambar '{image_path}' belum ada di repo)")
