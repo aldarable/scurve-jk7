@@ -287,22 +287,29 @@ st.caption(
 
 zone_df = load_zone_progress(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
 
-tab_gf, tab_l1, tab_l2 = st.tabs(["Kolom GF", "Zone Level 1", "Zone Level 2"])
+tab_gf, tab_l1, tab_l2 = st.tabs(["GF", "Level 1", "Level 2"])
 
 with tab_gf:
-    render_progress_summary(zone_df, "GF", "JK7 STRUCTURE (Kolom GF)", unit_label="kolom")
+    render_progress_summary(zone_df, "GF", "Zone", "JK7 STRUCTURE — Zone GF")
+    st.divider()
+    render_progress_summary(zone_df, "GF", "Kolom", "JK7 STRUCTURE — Kolom GF")
 
 with tab_l1:
-    render_progress_summary(zone_df, "L1", "JK7 STRUCTURE (Level 1)", unit_label="Zone")
+    render_progress_summary(zone_df, "L1", "Zone", "JK7 STRUCTURE — Zone Level 1")
+    st.divider()
+    render_progress_summary(zone_df, "L1", "Kolom", "JK7 STRUCTURE — Kolom Level 1")
 
 with tab_l2:
-    render_progress_summary(zone_df, "L2", "JK7 STRUCTURE (Level 2)", unit_label="Zone")
+    render_progress_summary(zone_df, "L2", "Zone", "JK7 STRUCTURE — Zone Level 2")
+    st.divider()
+    render_progress_summary(zone_df, "L2", "Kolom", "JK7 STRUCTURE — Kolom Level 2")
 
 st.divider()
 
 with st.expander("✏️ Update Progress Harian (Zone/Kolom)"):
     with st.form("update_zone_progress_form", clear_on_submit=True):
         level_input = st.selectbox("Level", ["GF", "L1", "L2"])
+        metric_input = st.selectbox("Metric", ["Zone", "Kolom"])
         done_input = st.number_input("Total Selesai (kumulatif)", min_value=0, step=1)
         target_input = st.number_input("Target Total", min_value=1, step=1, value=522)
         date_zone_input = st.date_input("Tanggal Update", value=datetime.now().date())
@@ -311,7 +318,7 @@ with st.expander("✏️ Update Progress Harian (Zone/Kolom)"):
         if submitted_zone:
             ok, msg = append_zone_progress(
                 get_gspread_client(), st.secrets["sheet_id"],
-                date_zone_input.strftime("%Y-%m-%d"), level_input,
+                date_zone_input.strftime("%Y-%m-%d"), level_input, metric_input,
                 done_input, target_input,
                 worksheet_name="zone_status",
             )
