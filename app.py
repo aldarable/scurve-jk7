@@ -285,19 +285,29 @@ st.caption(
     "Update angka kumulatif harian lewat form di bagian bawah, atau edit langsung di sheet."
 )
 
-zone_df = load_zone_progress(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
+try:
+    zone_df = load_zone_progress(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
+except ValueError as e:
+    st.error(str(e))
+    st.info("Cek header baris 1 di tab 'zone_status' — pastikan tulisannya persis: "
+             "Date, Level, Metric, Done, Target (tanpa spasi tambahan di awal/akhir).")
+    zone_df = pd.DataFrame(columns=["Date", "Level", "Metric", "Done", "Target"])
 
 tab_gf, tab_l1, tab_l2 = st.tabs(["GF", "Level 1", "Level 2"])
 
 with tab_gf:
-    render_progress_summary(zone_df, "GF", "Zone", "JK7 STRUCTURE — Zone GF")
+    render_progress_summary(zone_df, "GF", "Zone", "JK7 STRUCTURE — Zone GF",
+                             image_path="assets/denah_gf.jpeg")
     st.divider()
-    render_progress_summary(zone_df, "GF", "Kolom", "JK7 STRUCTURE — Kolom GF")
+    render_progress_summary(zone_df, "GF", "Kolom", "JK7 STRUCTURE — Kolom GF",
+                             image_path="assets/denah_kolom_gf.jpeg")
 
 with tab_l1:
-    render_progress_summary(zone_df, "L1", "Zone", "JK7 STRUCTURE — Zone Level 1")
+    render_progress_summary(zone_df, "L1", "Zone", "JK7 STRUCTURE — Zone Level 1",
+                             image_path="assets/denah_L1.jpeg")
     st.divider()
-    render_progress_summary(zone_df, "L1", "Kolom", "JK7 STRUCTURE — Kolom Level 1")
+    render_progress_summary(zone_df, "L1", "Kolom", "JK7 STRUCTURE — Kolom Level 1",
+                             image_path="assets/denah_kolom_L1.jpeg")
 
 with tab_l2:
     render_progress_summary(zone_df, "L2", "Zone", "JK7 STRUCTURE — Zone Level 2")
