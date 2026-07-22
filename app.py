@@ -241,7 +241,7 @@ with col_form:
         date_input = st.date_input("Date", value=next_date)
         qty_input = st.number_input("Actual Zoning", min_value=0.0, step=1.0)
         remarks_input = st.text_input("Remarks / Milestone (opsional)")
-        submitted = st.form_submit_button("Successfully updated ✅", type="primary")
+        submitted = st.form_submit_button("Update Data", type="primary")
 
         if submitted:
             ok, msg = update_actual(date_input.strftime("%Y-%m-%d"), qty_input, remarks_input)
