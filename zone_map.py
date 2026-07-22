@@ -1,23 +1,29 @@
 """
-zone_map.py — Modul ringkasan progress Zone/Kolom (Daily & Accumulative Progress)
+zone_map.py — Modul ringkasan progress Zone & Kolom (Daily & Accumulative Progress)
 untuk dashboard S-Curve JK7. Import modul ini ke app.py yang sudah ada.
 
-STRUKTUR SHEET BARU YANG DIPERLUKAN (tab terpisah, nama bebas, default "zone_progress"):
-    Date       | Level | Done | Target
-    2026-07-19 | GF    | 518  | 522
-    2026-07-20 | GF    | 518  | 522
-    2026-07-19 | L1    | 88   | 212
-    2026-07-20 | L1    | 88   | 212
+STRUKTUR SHEET YANG DIPERLUKAN (tab terpisah, nama bebas, default "zone_status"):
+    Date       | Level | Metric | Done | Target
+    2026-07-20 | GF    | Kolom  | 518  | 522
+    2026-07-19 | L1    | Zone   | 88   | 212
+    2026-07-20 | L1    | Zone   | 88   | 212
+    2026-07-20 | L1    | Kolom  | 269  | 522
 
 - Date   : tanggal snapshot/update (format YYYY-MM-DD)
-- Level  : "GF" / "L1" / "L2" dst — sesuai level yang kamu punya
-- Done   : jumlah zone/kolom yang SUDAH selesai (kumulatif) per tanggal itu
-- Target : total zone/kolom yang harus dicapai untuk level itu (biasanya konstan,
-           tapi diketik ulang tiap baris supaya fleksibel kalau target berubah)
+- Level  : "GF" / "L1" / "L2" dst. Bebas ditulis "Kolom GF", "Level 1", "Lt 1",
+           dll -- otomatis dinormalisasi (lihat normalize_level).
+- Metric : JENIS hitungan untuk baris itu -- WAJIB diisi salah satu:
+           "Zone"  -> hitungan monitoring zone (mis. 24/32 zone)
+           "Kolom" -> hitungan kolom individual (mis. 269/522 kolom)
+           Ini PENTING: Level yang sama bisa punya progress Zone dan Kolom
+           yang berbeda-beda, makanya kolom ini wajib ada supaya tidak tercampur.
+- Done   : jumlah yang SUDAH selesai (kumulatif) untuk kombinasi Level+Metric itu
+- Target : total target untuk kombinasi Level+Metric itu
 
 CARA PAKAI HARIAN:
-    Tiap hari, tambah 1 baris baru per level dengan angka "Done" terbaru (kumulatif,
-    bukan tambahan hari itu saja). Dari situ modul ini otomatis hitung:
+    Tiap hari, tambah baris baru per (Level, Metric) dengan angka "Done" terbaru
+    (kumulatif). Kalau level itu punya 2 metrik (Zone & Kolom), berarti 2 baris
+    per hari untuk level tsb. Dari situ otomatis dihitung:
     - CURRENT   : penambahan dari update sebelumnya ke update terbaru
     - PREVIOUS  : penambahan dari update sebelum-sebelumnya ke update sebelumnya
     - WEEKLY    : penambahan dalam 7 hari terakhir
@@ -29,37 +35,71 @@ import pandas as pd
 from datetime import timedelta
 
 
+def normalize_level(raw: str) -> str:
+    """Ubah teks Level apapun (mis. 'Kolom Level 1', 'Zone Level 1', 'Lt 1', 'L1',
+    'Kolom GF', 'Ground Floor') jadi salah satu dari 'GF', 'L1', 'L2', dst.
+    Kalau tidak dikenali, dikembalikan apa adanya (biar kelihatan di data mentah)."""
+    if raw is None:
+        return ""
+    text = str(raw).strip().lower()
+    text = "".join(ch for ch in text if ch.isalnum() or ch.isspace())
+
+    if "gf" in text or "ground" in text:
+        return "GF"
+
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if digits:
+        return f"L{digits}"
+
+    return str(raw).strip()
+
+
+def normalize_metric(raw: str) -> str:
+    """Ubah teks Metric jadi 'Zone' atau 'Kolom'. Default 'Zone' kalau tidak jelas."""
+    if raw is None:
+        return "Zone"
+    text = str(raw).strip().lower()
+    if "kolom" in text or "column" in text:
+        return "Kolom"
+    if "zone" in text:
+        return "Zone"
+    return str(raw).strip() or "Zone"
+
+
 @st.cache_data(ttl=30)
-def load_zone_progress(_client, sheet_id: str, worksheet_name: str = "zone_progress") -> pd.DataFrame:
+def load_zone_progress(_client, sheet_id: str, worksheet_name: str = "zone_status") -> pd.DataFrame:
     ws = _client.open_by_key(sheet_id).worksheet(worksheet_name)
     records = ws.get_all_records()
     df = pd.DataFrame(records)
 
-    required = ["Date", "Level", "Done", "Target"]
+    required = ["Date", "Level", "Metric", "Done", "Target"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         st.error(f"Kolom wajib tidak ditemukan di sheet '{worksheet_name}': {missing}")
         st.stop()
 
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["Level"] = df["Level"].apply(normalize_level)
+    df["Metric"] = df["Metric"].apply(normalize_metric)
     df["Done"] = pd.to_numeric(df["Done"], errors="coerce").fillna(0)
     df["Target"] = pd.to_numeric(df["Target"], errors="coerce").fillna(0)
     df = df.dropna(subset=["Date"]).sort_values("Date").reset_index(drop=True)
     return df
 
 
-def append_zone_progress(client, sheet_id: str, date_str: str, level: str,
-                          done: int, target: int, worksheet_name: str = "zone_progress"):
-    """Tambah baris baru (snapshot hari ini) untuk 1 level. Dipanggil dari form di app.py."""
+def append_zone_progress(client, sheet_id: str, date_str: str, level: str, metric: str,
+                          done: int, target: int, worksheet_name: str = "zone_status"):
+    """Tambah baris baru (snapshot hari ini) untuk 1 kombinasi Level+Metric."""
     ws = client.open_by_key(sheet_id).worksheet(worksheet_name)
-    ws.append_row([date_str, level, done, target])
+    ws.append_row([date_str, level, metric, done, target])
     return True, "Progress tersimpan."
 
 
-def compute_progress_summary(zone_df: pd.DataFrame, level: str) -> dict | None:
+def compute_progress_summary(zone_df: pd.DataFrame, level: str, metric: str) -> dict | None:
     """Hitung Daily Progress (previous/current/weekly) & Accumulative Progress
-    (total/remaining/percentage) dari log kumulatif per level."""
-    df = zone_df[zone_df["Level"] == level].sort_values("Date").reset_index(drop=True)
+    (total/remaining/percentage) untuk 1 kombinasi Level+Metric."""
+    df = zone_df[(zone_df["Level"] == level) & (zone_df["Metric"] == metric)]
+    df = df.sort_values("Date").reset_index(drop=True)
     if df.empty:
         return None
 
@@ -90,22 +130,24 @@ def compute_progress_summary(zone_df: pd.DataFrame, level: str) -> dict | None:
     }
 
 
-def render_progress_summary(zone_df: pd.DataFrame, level: str, title: str, unit_label: str = "Zone"):
-    """Render panel ringkasan persis seperti gambar cutoff: Daily Progress & Accumulative Progress."""
-    s = compute_progress_summary(zone_df, level)
-    st.markdown(f"#### {title}")
+def render_progress_summary(zone_df: pd.DataFrame, level: str, metric: str,
+                             title: str, unit_label: str | None = None):
+    """Render panel ringkasan persis seperti gambar cutoff: Daily Progress & Accumulative Progress,
+    untuk 1 kombinasi Level+Metric (mis. Level='L1', Metric='Zone')."""
+    s = compute_progress_summary(zone_df, level, metric)
+    unit_label = unit_label or metric.lower()
+    st.markdown(f"##### {title}")
 
     if s is None:
-        st.info(f"Belum ada data untuk level {level}. Isi lewat form update di bawah.")
+        st.info(f"Belum ada data untuk {level} - {metric}. Isi lewat form update di bawah.")
         return
 
     st.caption(f"CUT OFF {s['last_date'].strftime('%d %B %Y').upper()}")
 
-    # Baris ringkas gabungan, mis. "TOTAL : 518/522 kolom (99.23%) +0"
     trend_icon = "✅" if s["remaining"] <= 0 else "📈"
     st.markdown(
-        f"### TOTAL : {s['total']}/{s['target']} {unit_label} "
-        f"({s['pct']:.2f}%) {s['current_new']:+d} {trend_icon}"
+        f"**TOTAL : {s['total']}/{s['target']} {unit_label} "
+        f"({s['pct']:.2f}%) {s['current_new']:+d} {trend_icon}**"
     )
 
     c1, c2 = st.columns(2)
