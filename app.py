@@ -275,22 +275,20 @@ for col in ["Plan Kum%", "Actual Kum%", "Deviasi"]:
 st.dataframe(table_df, hide_index=True, use_container_width=True)
 
 
-# =========================================================
-# ZONE / KOLOM PROGRESS (Kolom GF, Zone Level 1, Zone Level 2)
-# =========================================================
+# ZONE / KOLOM PROGRESS
 st.divider()
 st.header("🏗️ Zone / Kolom Progress")
 st.caption(
-    "Data di bawah ini diambil dari tab 'zone_status' di Google Sheet yang sama. "
-    "Update angka kumulatif harian lewat form di bagian bawah, atau edit langsung di sheet."
+    "The data below is sourced from the 'zone_status' worksheet in the same Google Sheets file. "
+    "Use the form below to update the daily cumulative progress, or edit the data directly in Google Sheets."
 )
 
 try:
     zone_df = load_zone_progress(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
 except ValueError as e:
     st.error(str(e))
-    st.info("Cek header baris 1 di tab 'zone_status' — pastikan tulisannya persis: "
-             "Date, Level, Metric, Done, Target (tanpa spasi tambahan di awal/akhir).")
+    st.info("Check the header row (Row 1) in the 'zone_status' worksheet. Make sure the column names exactly match: "
+"'Date', 'Level', 'Metric', 'Done', and 'Target' (with no leading or trailing spaces).")
     zone_df = pd.DataFrame(columns=["Date", "Level", "Metric", "Done", "Target"])
 
 tab_gf, tab_l1, tab_l2 = st.tabs(["GF", "Level 1", "Level 2"])
@@ -300,14 +298,14 @@ with tab_gf:
                              image_path="assets/denah_gf.jpeg")
     st.divider()
     render_progress_summary(zone_df, "GF", "Kolom", "JK7 STRUCTURE — Kolom GF",
-                             image_path="assets/denah_kolom_gf.jpeg")
+                             image_path="assets/denah_kolom_gf.jpg")
 
 with tab_l1:
     render_progress_summary(zone_df, "L1", "Zone", "JK7 STRUCTURE — Zone Level 1",
                              image_path="assets/denah_L1.jpeg")
     st.divider()
     render_progress_summary(zone_df, "L1", "Kolom", "JK7 STRUCTURE — Kolom Level 1",
-                             image_path="assets/denah_kolom_L1.jpeg")
+                             image_path="assets/denah_kolom_L1.jpg")
 
 with tab_l2:
     render_progress_summary(zone_df, "L2", "Zone", "JK7 STRUCTURE — Zone Level 2")
