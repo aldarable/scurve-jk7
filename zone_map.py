@@ -32,6 +32,7 @@ CARA PAKAI HARIAN:
 
 import streamlit as st
 import pandas as pd
+import os
 from datetime import timedelta
 
 
@@ -72,11 +73,21 @@ def load_zone_progress(_client, sheet_id: str, worksheet_name: str = "zone_statu
     records = ws.get_all_records()
     df = pd.DataFrame(records)
 
+    # Bersihkan spasi tak terlihat di nama kolom (mis. "Date " -> "Date"),
+    # penyebab paling umum error "kolom tidak ditemukan" padahal kelihatan ada di sheet.
+    df.columns = [str(c).strip() for c in df.columns]
+
     required = ["Date", "Level", "Metric", "Done", "Target"]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        st.error(f"Kolom wajib tidak ditemukan di sheet '{worksheet_name}': {missing}")
-        st.stop()
+        # PENTING: jangan panggil st.error()/st.stop() di dalam fungsi yang di-cache
+        # (@st.cache_data) -- itu bikin Streamlit nyangkut loading terus, bukan
+        # berhenti rapi. Lempar exception biasa, baru ditangkap & ditampilkan
+        # di luar fungsi cache (lihat app.py).
+        raise ValueError(
+            f"Kolom wajib tidak ditemukan di sheet '{worksheet_name}': {missing}. "
+            f"Kolom yang terbaca: {list(df.columns)}"
+        )
 
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df["Level"] = df["Level"].apply(normalize_level)
@@ -131,9 +142,14 @@ def compute_progress_summary(zone_df: pd.DataFrame, level: str, metric: str) -> 
 
 
 def render_progress_summary(zone_df: pd.DataFrame, level: str, metric: str,
-                             title: str, unit_label: str | None = None):
+                             title: str, unit_label: str | None = None,
+                             image_path: str | None = None):
     """Render panel ringkasan persis seperti gambar cutoff: Daily Progress & Accumulative Progress,
-    untuk 1 kombinasi Level+Metric (mis. Level='L1', Metric='Zone')."""
+    untuk 1 kombinasi Level+Metric (mis. Level='L1', Metric='Zone').
+
+    image_path: opsional, path ke gambar denah statis (mis. 'assets/denah_gf.jpeg')
+    yang mau ditampilkan di samping/atas ringkasan. Kalau file tidak ada, dilewati
+    diam-diam (tidak error)."""
     s = compute_progress_summary(zone_df, level, metric)
     unit_label = unit_label or metric.lower()
     st.markdown(f"##### {title}")
@@ -142,22 +158,35 @@ def render_progress_summary(zone_df: pd.DataFrame, level: str, metric: str,
         st.info(f"Belum ada data untuk {level} - {metric}. Isi lewat form update di bawah.")
         return
 
-    st.caption(f"CUT OFF {s['last_date'].strftime('%d %B %Y').upper()}")
+    if image_path:
+        img_col, info_col = st.columns([1, 1.4])
+    else:
+        img_col, info_col = None, st.container()
 
-    trend_icon = "✅" if s["remaining"] <= 0 else "📈"
-    st.markdown(
-        f"**TOTAL : {s['total']}/{s['target']} {unit_label} "
-        f"({s['pct']:.2f}%) {s['current_new']:+d} {trend_icon}**"
-    )
+    if image_path and img_col is not None:
+        with img_col:
+            if os.path.exists(image_path):
+                st.image(image_path, use_container_width=True)
+            else:
+                st.caption(f"(gambar '{image_path}' belum ada di repo)")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**DAILY PROGRESS**")
-        st.write(f"PREVIOUS : {s['previous_new']:+d} {unit_label}")
-        st.write(f"CURRENT  : {s['current_new']:+d} {unit_label}")
-        st.write(f"WEEKLY (7 days) : {s['weekly_new']:+d} {unit_label}")
-    with c2:
-        st.markdown("**ACCUMULATIVE PROGRESS**")
-        st.write(f"TOTAL      : {s['total']}/{s['target']} {unit_label}")
-        st.write(f"REMAINING  : {s['remaining']} {unit_label}")
-        st.write(f"PERCENTAGE : {s['pct']:.2f}%")
+    with info_col:
+        st.caption(f"CUT OFF {s['last_date'].strftime('%d %B %Y').upper()}")
+
+        trend_icon = "✅" if s["remaining"] <= 0 else "📈"
+        st.markdown(
+            f"**TOTAL : {s['total']}/{s['target']} {unit_label} "
+            f"({s['pct']:.2f}%) {s['current_new']:+d} {trend_icon}**"
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**DAILY PROGRESS**")
+            st.write(f"PREVIOUS : {s['previous_new']:+d} {unit_label}")
+            st.write(f"CURRENT  : {s['current_new']:+d} {unit_label}")
+            st.write(f"WEEKLY (7 days) : {s['weekly_new']:+d} {unit_label}")
+        with c2:
+            st.markdown("**ACCUMULATIVE PROGRESS**")
+            st.write(f"TOTAL      : {s['total']}/{s['target']} {unit_label}")
+            st.write(f"REMAINING  : {s['remaining']} {unit_label}")
+            st.write(f"PERCENTAGE : {s['pct']:.2f}%")
