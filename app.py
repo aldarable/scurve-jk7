@@ -10,10 +10,7 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-from zone_map import (
-    load_zone_status, update_zone_status,
-    render_zone_summary, render_zone_map, render_zone_checklist,
-)
+from zone_map import load_zone_progress, append_zone_progress, render_progress_summary
 
 st.set_page_config(
     page_title="S-Curve Structure - JK7",
@@ -279,64 +276,44 @@ st.dataframe(table_df, hide_index=True, use_container_width=True)
 
 
 # =========================================================
-# ZONE / KOLOM TRACKING (Kolom GF, Zone Level 1, Zone Level 2)
+# ZONE / KOLOM PROGRESS (Kolom GF, Zone Level 1, Zone Level 2)
 # =========================================================
 st.divider()
-st.header("🏗️ Zone / Kolom Tracking")
+st.header("🏗️ Zone / Kolom Progress")
 st.caption(
     "Data di bawah ini diambil dari tab 'zone_status' di Google Sheet yang sama. "
-    "Update status lewat form di bagian paling bawah, atau edit langsung di sheet."
+    "Update angka kumulatif harian lewat form di bagian bawah, atau edit langsung di sheet."
 )
 
-zone_df = load_zone_status(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
+zone_df = load_zone_progress(get_gspread_client(), st.secrets["sheet_id"], "zone_status")
 
 tab_gf, tab_l1, tab_l2 = st.tabs(["Kolom GF", "Zone Level 1", "Zone Level 2"])
 
 with tab_gf:
-    render_zone_summary(zone_df, "GF", "JK7 STRUCTURE (Kolom GF)", short_label="Cor Ground Floor")
-    render_zone_map(zone_df, "GF", bg_image_path="assets/denah_gf.png")  # opsional, lewati jika belum ada
-    render_zone_checklist(zone_df, "GF")
+    render_progress_summary(zone_df, "GF", "JK7 STRUCTURE (Kolom GF)", unit_label="kolom")
 
 with tab_l1:
-    render_zone_summary(zone_df, "L1", "JK7 STRUCTURE (Level 1)", short_label="Cor Level 1")
-    render_zone_map(zone_df, "L1", bg_image_path="assets/denah_L1.png")  # opsional
-    render_zone_checklist(zone_df, "L1")
-    
-with tab_cgf:
-    render_zone_summary(zone_df, "CGF", "JK7 STRUCTURE Kolom (Level GF)", short_label="Kolom Level GF")
-    render_zone_map(zone_df, "CGF", bg_image_path="assets/denah_kolom_gf.png")  # opsional
-    render_zone_checklist(zone_df, "CGF")
+    render_progress_summary(zone_df, "L1", "JK7 STRUCTURE (Level 1)", unit_label="Zone")
 
-with tab_cl1:
-    render_zone_summary(zone_df, "CL1", "JK7 STRUCTURE Kolom (Level 1)", short_label="Kolom Level L1")
-    render_zone_map(zone_df, "CL1", bg_image_path="assets/denah_kolom_L1.png")  # opsional
-    render_zone_checklist(zone_df, "CL1")
-    
 with tab_l2:
-    render_zone_summary(zone_df, "L2", "JK7 STRUCTURE (Level 2)", short_label="Cor Level 2")
-    render_zone_map(zone_df, "L2", bg_image_path="assets/denah_l2.png")  # opsional
-    render_zone_checklist(zone_df, "L2")
-    
-with tab_Cl2:
-    render_zone_summary(zone_df, "CL2", "JK7 STRUCTURE Kolom (Level 2)", short_label="Kolom Level 2")
-    render_zone_map(zone_df, "CL2", bg_image_path="assets/denah_l2.png")  # opsional
-    render_zone_checklist(zone_df, "CL2")
+    render_progress_summary(zone_df, "L2", "JK7 STRUCTURE (Level 2)", unit_label="Zone")
 
 st.divider()
 
-with st.expander("✏️ Update Status Zone/Kolom"):
-    with st.form("update_zone_form", clear_on_submit=True):
-        level_input = st.selectbox("Level", ["GF", "CGF", "L1", "CL1", "L2"])
-        zone_input = st.number_input("Zone / Kolom No.", min_value=1, step=1)
-        status_input = st.selectbox("Status", ["Belum", "Bekisting", "Besi", "Tercor"])
+with st.expander("✏️ Update Progress Harian (Zone/Kolom)"):
+    with st.form("update_zone_progress_form", clear_on_submit=True):
+        level_input = st.selectbox("Level", ["GF", "L1", "L2"])
+        done_input = st.number_input("Total Selesai (kumulatif)", min_value=0, step=1)
+        target_input = st.number_input("Target Total", min_value=1, step=1, value=522)
         date_zone_input = st.date_input("Tanggal Update", value=datetime.now().date())
-        submitted_zone = st.form_submit_button("Simpan Status", type="primary")
+        submitted_zone = st.form_submit_button("Simpan Progress", type="primary")
 
         if submitted_zone:
-            ok, msg = update_zone_status(
+            ok, msg = append_zone_progress(
                 get_gspread_client(), st.secrets["sheet_id"],
-                zone_input, level_input, status_input,
-                date_zone_input.strftime("%Y-%m-%d"),
+                date_zone_input.strftime("%Y-%m-%d"), level_input,
+                done_input, target_input,
+                worksheet_name="zone_status",
             )
             st.cache_data.clear()
             st.success(msg) if ok else st.error(msg)
