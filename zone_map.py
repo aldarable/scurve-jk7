@@ -166,7 +166,15 @@ def render_progress_summary(zone_df: pd.DataFrame, level: str, metric: str,
     if image_path and img_col is not None:
         with img_col:
             if os.path.exists(image_path):
-                st.image(image_path, use_container_width=True)
+                try:
+                    st.image(image_path, use_container_width=True)
+                except Exception:
+                    st.caption(
+                        f"⚠️ Gambar '{image_path}' ada tapi tidak bisa dibaca "
+                        f"(kemungkinan file rusak atau formatnya bukan JPG/PNG asli, "
+                        f"mis. HEIC yang cuma di-rename ekstensinya). "
+                        f"Coba convert ulang jadi JPG/PNG asli lalu upload lagi."
+                    )
             else:
                 st.caption(f"(gambar '{image_path}' belum ada di repo)")
 
